@@ -446,3 +446,77 @@ select:focus {
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+/* PowerTrack Brand Overrides */
+:root {
+  --brand-primary: #0b2f5b;
+  --brand-accent: #09a3be;
+  --brand-bg: #eef5f9;
+  --brand-surface: #ffffff;
+  --brand-text: #001e46;
+  --brand-muted: #425a7a;
+  --brand-font: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  font-family: var(--brand-font);
+  color: var(--brand-text);
+  background: radial-gradient(120% 90% at 0% 0%, #dff1f4 0%, var(--brand-bg) 55%, #f8fbfb 100%);
+}
+
+.container {
+  background: var(--brand-surface);
+  box-shadow: 0 10px 30px rgba(2, 44, 56, 0.12);
+}
+
+.header {
+  background: var(--brand-primary);
+}
+
+.tab-button.active {
+  color: var(--brand-primary);
+  border-bottom-color: var(--brand-primary);
+}
+
+.info-box {
+  border-left-color: var(--brand-primary);
+  background: #eaf4f6;
+}
+
+.btn-primary {
+  background: var(--brand-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: var(--brand-accent);
+  color: #ffffff;
+}
+
+.btn-secondary:hover,
+.btn-small:hover {
+  background: var(--brand-accent);
+  color: #ffffff;
+}
+
+.btn-secondary {
+  color: var(--brand-text);
+}
+
+.btn-small {
+  color: var(--brand-text);
+}
+
+.tool-section h3 {
+  color: var(--brand-text);
+}
+
+.command-item:hover {
+  border-left-color: var(--brand-accent);
+}
+
+.empty-state,
+.help-text,
+.detail-row .label {
+  color: var(--brand-muted);
+}
