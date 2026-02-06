@@ -334,9 +334,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
            });
          });
 
-         const arrayBuffer = await zip.generateAsync({ type: 'arraybuffer' });
-         const zipname = `powertrack_api_logs_${new Date().toISOString().split('T')[0]}.zip`;
-         sendResponse({ success: true, arrayBuffer, filename: zipname });
+        const base64 = await zip.generateAsync({ type: 'base64' });
+        const zipname = `powertrack_api_logs_${new Date().toISOString().split('T')[0]}.zip`;
+        sendResponse({ success: true, base64, filename: zipname });
        })().catch((error) => {
          sendResponse({ success: false, error: error.message });
        });

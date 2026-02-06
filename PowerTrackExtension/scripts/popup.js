@@ -107,7 +107,7 @@ document.getElementById('export-json').addEventListener('click', async () => {
   try {
     const result = await chrome.runtime.sendMessage({ type: 'EXPORT_API_DOCS_JSON' });
     if (result && result.success) {
-      const blob = new Blob([result.arrayBuffer], { type: 'application/zip' });
+      const blob = base64ToBlob(result.base64, 'application/zip');
       downloadFile(blob, result.filename, 'application/zip');
       showStatus('API logs exported as ZIP', 'success');
     } else {
@@ -247,6 +247,23 @@ function downloadFile(content, filename, mimeType) {
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function base64ToBlob(base64, mimeType) {
+  const byteChars = atob(base64 || '');
+  const byteArrays = [];
+  const sliceSize = 1024;
+
+  for (let offset = 0; offset < byteChars.length; offset += sliceSize) {
+    const slice = byteChars.slice(offset, offset + sliceSize);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i += 1) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    byteArrays.push(new Uint8Array(byteNumbers));
+  }
+
+  return new Blob(byteArrays, { type: mimeType });
 }
 
 loadAPILog();
