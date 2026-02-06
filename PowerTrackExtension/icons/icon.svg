@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Background -->
+  <rect width="128" height="128" rx="24" fill="url(#grad1)"/>
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Lightning bolt (power symbol) -->
+  <path d="M 70 25 L 50 65 L 65 65 L 55 103 L 90 55 L 70 55 L 85 25 Z"
+        fill="#FFD700" stroke="#FFA500" stroke-width="2"/>
+
+  <!-- API brackets -->
+  <path d="M 35 45 L 25 45 L 25 83 L 35 83"
+        stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M 93 45 L 103 45 L 103 83 L 93 83"
+        stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+</svg>

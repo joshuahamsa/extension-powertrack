@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PowerTrack Assistant</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>PowerTrack Assistant</h1>
+      <div class="version">v1.0.0</div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-button active" data-tab="api">API Log</button>
+    </div>
+
+    <!-- API Log Tab -->
+    <div class="tab-content active" id="api-tab">
+      <div class="section">
+        <div class="section-header">
+          <h2>API Call Log</h2>
+          <div class="button-group">
+            <button id="view-stats" class="btn btn-small">Stats</button>
+            <button id="clear-log" class="btn btn-small">Clear All</button>
+          </div>
+        </div>
+
+        <!-- Statistics Box -->
+        <div id="log-stats" class="info-box" style="display: none;">
+          <h3>Log Statistics</h3>
+          <div class="detail-row">
+            <span class="label">Total Calls:</span>
+            <span id="stat-total">0</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Unique Endpoints:</span>
+            <span id="stat-endpoints">0</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Storage Size:</span>
+            <span id="stat-size">0 KB</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Time Range:</span>
+            <span id="stat-range">-</span>
+          </div>
+        </div>
+
+         <!-- Export Options -->
+         <div class="button-group">
+           <button id="export-json" class="btn btn-secondary">Export JSON</button>
+           <button id="export-markdown" class="btn btn-secondary">Export Docs (MD)</button>
+           <button id="update-repo" class="btn btn-primary">Update Repo</button>
+           <button id="fetch-existing-docs" class="btn btn-small">Fetch Existing Docs</button>
+         </div>
+
+        <div class="tool-section">
+          <h3>GitHub Repo</h3>
+          <div id="github-config" style="display: none;">
+            <div class="input-group">
+              <label>PAT:</label>
+              <input type="password" id="github-pat" placeholder="ghp_...">
+            </div>
+            <div class="input-group">
+              <label>Owner:</label>
+              <input type="text" id="github-owner" value="dsd-hamsa">
+            </div>
+            <div class="input-group">
+              <label>Repo:</label>
+              <input type="text" id="github-repo" value="PowerTrack-API">
+            </div>
+            <div class="input-group">
+              <label>Branch:</label>
+              <input type="text" id="github-branch" value="v2">
+            </div>
+            <button id="save-github-config" class="btn btn-small">Save Config</button>
+          </div>
+          <button id="show-github-config" class="btn btn-small">Github Config</button>
+        </div>
+
+        <div id="api-log" class="log-container">
+          <div class="empty-state">No API calls logged yet</div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Status Footer -->
+    <div class="footer">
+      <div id="status-message"></div>
+    </div>
+  </div>
+
+  <script src="scripts/popup.js"></script>
+</body>
+</html>
