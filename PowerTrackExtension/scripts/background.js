@@ -552,13 +552,19 @@ function getLogStats() {
 }
 
 // GitHub API Functions
+function getGitHubHeaders(config) {
+  return {
+    'Authorization': `Bearer ${config.pat}`,
+    'Accept': 'application/vnd.github.v3+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+}
+
 async function fetchGitHubContents(path, config) {
   const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}?ref=${config.branch}`;
+  console.log(`[GitHub] GET ${url}`);
   const response = await fetch(url, {
-    headers: {
-      'Authorization': `token ${config.pat}`,
-      'Accept': 'application/vnd.github.v3+json'
-    }
+    headers: getGitHubHeaders(config)
   });
 
   if (!response.ok) {
@@ -567,6 +573,31 @@ async function fetchGitHubContents(path, config) {
   }
 
   return await response.json();
+}
+
+async function resolveGitHubConfig(config) {
+  if (!config || !config.owner || !config.repo || !config.pat) return config;
+
+  const headers = getGitHubHeaders(config);
+  const repoUrl = `https://api.github.com/repos/${config.owner}/${config.repo}`;
+  const repoResponse = await fetch(repoUrl, { headers });
+  if (!repoResponse.ok) {
+    throw new Error(`GitHub repo error: ${repoResponse.status} ${repoResponse.statusText}`);
+  }
+
+  const repoInfo = await repoResponse.json();
+  let branch = (config.branch || '').trim();
+  if (!branch) {
+    branch = repoInfo.default_branch || 'main';
+  }
+
+  const branchUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/branches/${encodeURIComponent(branch)}`;
+  const branchResponse = await fetch(branchUrl, { headers });
+  if (!branchResponse.ok) {
+    branch = repoInfo.default_branch || 'main';
+  }
+
+  return { ...config, branch };
 }
 
 // Parse existing .md content to extract sections
@@ -636,8 +667,7 @@ async function pushFileToGitHub(path, filename, content, config, sha = null) {
   const response = await fetch(url, {
     method: 'PUT',
     headers: {
-      'Authorization': `token ${config.pat}`,
-      'Accept': 'application/vnd.github.v3+json',
+      ...getGitHubHeaders(config),
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
@@ -650,6 +680,125 @@ async function pushFileToGitHub(path, filename, content, config, sha = null) {
   }
 
   return await response.json();
+}
+
+async function commitFilesBatchToGitHub(files, config, commitMessage) {
+  if (!Array.isArray(files) || files.length === 0) {
+    return null;
+  }
+
+  const branchRef = encodeURIComponent(`heads/${config.branch}`);
+  const refUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/git/ref/${branchRef}`;
+  const refResponse = await fetch(refUrl, { headers: getGitHubHeaders(config) });
+  if (!refResponse.ok) {
+    throw new Error(`Failed to fetch branch ref: ${refResponse.status} ${refResponse.statusText}`);
+  }
+  const refData = await refResponse.json();
+  const parentCommitSha = refData.object?.sha;
+  if (!parentCommitSha) {
+    throw new Error('Failed to resolve current branch head commit SHA');
+  }
+
+  const commitUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/git/commits/${parentCommitSha}`;
+  const parentCommitResponse = await fetch(commitUrl, { headers: getGitHubHeaders(config) });
+  if (!parentCommitResponse.ok) {
+    throw new Error(`Failed to fetch parent commit: ${parentCommitResponse.status} ${parentCommitResponse.statusText}`);
+  }
+  const parentCommitData = await parentCommitResponse.json();
+  const baseTreeSha = parentCommitData.tree?.sha;
+  if (!baseTreeSha) {
+    throw new Error('Failed to resolve base tree SHA from parent commit');
+  }
+
+  const treeEntries = [];
+  for (const file of files) {
+    const blobUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/git/blobs`;
+    const blobResponse = await fetch(blobUrl, {
+      method: 'POST',
+      headers: {
+        ...getGitHubHeaders(config),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        content: file.content,
+        encoding: 'utf-8'
+      })
+    });
+
+    if (!blobResponse.ok) {
+      const errorText = await blobResponse.text();
+      throw new Error(`Failed to create blob for ${file.path}: ${blobResponse.status} ${blobResponse.statusText} - ${errorText}`);
+    }
+
+    const blobData = await blobResponse.json();
+    treeEntries.push({
+      path: file.path,
+      mode: '100644',
+      type: 'blob',
+      sha: blobData.sha
+    });
+  }
+
+  const treeUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/git/trees`;
+  const treeResponse = await fetch(treeUrl, {
+    method: 'POST',
+    headers: {
+      ...getGitHubHeaders(config),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      base_tree: baseTreeSha,
+      tree: treeEntries
+    })
+  });
+
+  if (!treeResponse.ok) {
+    const errorText = await treeResponse.text();
+    throw new Error(`Failed to create git tree: ${treeResponse.status} ${treeResponse.statusText} - ${errorText}`);
+  }
+
+  const treeData = await treeResponse.json();
+
+  const newCommitUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/git/commits`;
+  const newCommitResponse = await fetch(newCommitUrl, {
+    method: 'POST',
+    headers: {
+      ...getGitHubHeaders(config),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: commitMessage,
+      tree: treeData.sha,
+      parents: [parentCommitSha]
+    })
+  });
+
+  if (!newCommitResponse.ok) {
+    const errorText = await newCommitResponse.text();
+    throw new Error(`Failed to create commit: ${newCommitResponse.status} ${newCommitResponse.statusText} - ${errorText}`);
+  }
+
+  const newCommitData = await newCommitResponse.json();
+
+  const updateRefUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/git/refs/${branchRef}`;
+  const updateRefResponse = await fetch(updateRefUrl, {
+    method: 'PATCH',
+    headers: {
+      ...getGitHubHeaders(config),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      sha: newCommitData.sha,
+      force: false
+    })
+  });
+
+  if (!updateRefResponse.ok) {
+    const errorText = await updateRefResponse.text();
+    throw new Error(`Failed to update branch ref: ${updateRefResponse.status} ${updateRefResponse.statusText} - ${errorText}`);
+  }
+
+  return newCommitData.sha;
 }
 
 // Normalize endpoint for filename
@@ -916,6 +1065,11 @@ async function fetchExistingDocs(config) {
 async function updateRepo(config) {
   console.log('updateRepo called with config:', config);
   try {
+    const resolvedConfig = await resolveGitHubConfig(config);
+    if (resolvedConfig.branch !== config.branch) {
+      console.log(`Using GitHub default branch: ${resolvedConfig.branch}`);
+    }
+
     // Load logs
     const logs = [...detailedApiLog];
     console.log(`Loaded ${logs.length} logs from storage`);
@@ -932,7 +1086,8 @@ async function updateRepo(config) {
     });
     console.log('Groups keys:', Object.keys(groups));
 
-    // Generate and push files with retry and delay
+    // Generate files and push in a single commit
+    const filesToCommit = [];
     for (const [key, groupLogs] of Object.entries(groups)) {
       console.log(`Processing ${key}, logs count: ${groupLogs.length}`);
       const [endpoint, method] = key.split('|');
@@ -972,28 +1127,44 @@ async function updateRepo(config) {
           const methodFilename = `${method}_${filename.replace('.md', '')}.md`;
           const path = `docs/${folder}/${typeName}/${methodFilename}`;
 
-          console.log(`Pushing to ${path}`);
+          console.log(`Queueing ${path}`);
           const content = generateMDContent(endpoint, method, typeLogs);
-          await pushWithRetry(path, methodFilename, content, config);
-          await new Promise(resolve => setTimeout(resolve, 500));
+          filesToCommit.push({ path, filename: methodFilename, content });
         }
       } else {
         // Skip if exists
         const path = `${method}/${filename}`;
         try {
-          await fetchGitHubContents(`docs/${path}`, config);
-          console.log(`Skipping existing docs/${path}`);
+          const existing = await fetchGitHubContents(`docs/${path}`, resolvedConfig);
+          if (existing) {
+            console.log(`Skipping existing docs/${path}`);
+            continue;
+          }
         } catch (e) {
-          const path = `docs/${method}/${filename}`;
-          console.log(`Pushing to ${path}`);
-          const content = generateMDContent(endpoint, method, groupLogs);
-          await pushWithRetry(path, filename, content, config);
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Ignore errors and queue for create below.
         }
+
+        const fullPath = `docs/${method}/${filename}`;
+        console.log(`Queueing ${fullPath}`);
+        const content = generateMDContent(endpoint, method, groupLogs);
+        filesToCommit.push({ path: fullPath, filename, content });
       }
     }
 
-    return { success: true, message: `Updated ${Object.keys(groups).length} endpoints` };
+    if (filesToCommit.length === 0) {
+      return { success: true, message: 'No new docs to commit' };
+    }
+
+    const commitSha = await commitFilesBatchToGitHub(
+      filesToCommit,
+      resolvedConfig,
+      `Add ${filesToCommit.length} API doc file(s)`
+    );
+
+    return {
+      success: true,
+      message: `Committed ${filesToCommit.length} docs in one commit (${commitSha.slice(0, 7)})`
+    };
   } catch (error) {
     return { success: false, error: error.message };
   }
