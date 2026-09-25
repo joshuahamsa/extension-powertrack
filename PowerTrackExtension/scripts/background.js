@@ -130,7 +130,8 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
     }
   },
   { urls: ["https://apps.alsoenergy.com/api/*"] },
-  ["requestHeaders"]
+  // Chromium omits the Cookie header from requestHeaders without "extraHeaders".
+  ["requestHeaders", "extraHeaders"]
 );
 
 // Log API responses
@@ -156,7 +157,11 @@ async function saveAuthData(authData) {
   const existingAuth = stored.authData || {};
 
   // Only update if we have new/better data
-  if (!existingAuth.cookie || authData.headers.cookie !== existingAuth.cookie) {
+  if (
+    !existingAuth.cookie ||
+    authData.headers.cookie !== existingAuth.cookie ||
+    authData.headers.ae_s !== existingAuth.ae_s
+  ) {
     const newAuthData = {
       cookie: authData.headers.cookie,
       ae_s: authData.headers.ae_s,
@@ -167,6 +172,7 @@ async function saveAuthData(authData) {
     };
 
     await chrome.storage.local.set({ authData: newAuthData });
+    saveToKeychain(newAuthData);
 
     // Notify popup if open
     chrome.runtime.sendMessage({
@@ -174,6 +180,24 @@ async function saveAuthData(authData) {
       data: newAuthData
     }).catch(() => {}); // Ignore if popup not open
   }
+}
+
+// Hand the session to the native host, which stores it in the macOS Keychain
+// (see native-host/). Only cookie and ae_s are sent; failures are non-fatal.
+const KEYCHAIN_HOST = 'com.dsd_hamsa.powertrack_keychain';
+
+function saveToKeychain(auth) {
+  chrome.runtime.sendNativeMessage(
+    KEYCHAIN_HOST,
+    { cookie: auth.cookie, ae_s: auth.ae_s },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('Keychain host unavailable:', chrome.runtime.lastError.message);
+      } else if (!response || !response.ok) {
+        console.warn('Keychain host rejected session:', response && response.error);
+      }
+    }
+  );
 }
 
 // Log API calls
