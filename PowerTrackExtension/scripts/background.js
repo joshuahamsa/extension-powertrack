@@ -106,9 +106,10 @@ function isAlsoEnergyDomain(url) {
 chrome.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     if (details.url.includes('/api/') && isAlsoEnergyDomain(details.url)) {
+      // Normalize names: PowerTrack sends "ae_s"/"ae_v"; older code expected "AE-S".
       const headers = {};
       details.requestHeaders.forEach(header => {
-        headers[header.name] = header.value;
+        headers[header.name.toLowerCase().replace(/-/g, '_')] = header.value;
       });
 
       // Extract auth headers
@@ -117,10 +118,10 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
         url: details.url,
         method: details.method,
         headers: {
-          cookie: headers['Cookie'] || headers['cookie'],
-          ae_s: headers['AE-S'] || headers['ae-s'],
-          ae_v: headers['AE-V'] || headers['ae-v'],
-          referer: headers['Referer'] || headers['referer']
+          cookie: headers['cookie'],
+          ae_s: headers['ae_s'],
+          ae_v: headers['ae_v'],
+          referer: headers['referer']
         }
       };
 
@@ -153,6 +154,8 @@ async function saveAuthData(authData) {
     return; // Incomplete auth data
   }
 
+  saveToKeychain(authData.headers);
+
   const stored = await chrome.storage.local.get(['authData']);
   const existingAuth = stored.authData || {};
 
@@ -172,7 +175,6 @@ async function saveAuthData(authData) {
     };
 
     await chrome.storage.local.set({ authData: newAuthData });
-    saveToKeychain(newAuthData);
 
     // Notify popup if open
     chrome.runtime.sendMessage({
@@ -185,19 +187,33 @@ async function saveAuthData(authData) {
 // Hand the session to the native host, which stores it in the macOS Keychain
 // (see native-host/). Only cookie and ae_s are sent; failures are non-fatal.
 const KEYCHAIN_HOST = 'com.dsd_hamsa.powertrack_keychain';
+// In memory only, so the first capture after a reload or restart is always sent.
+let lastSentToKeychain = null;
+let pendingKeychainAuth = null;
+let keychainTimer = null;
+const KEYCHAIN_SETTLE_MS = 2000; // PowerTrack rotates cookies while a page loads
 
 function saveToKeychain(auth) {
-  chrome.runtime.sendNativeMessage(
-    KEYCHAIN_HOST,
-    { cookie: auth.cookie, ae_s: auth.ae_s },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        console.warn('Keychain host unavailable:', chrome.runtime.lastError.message);
-      } else if (!response || !response.ok) {
-        console.warn('Keychain host rejected session:', response && response.error);
-      }
+  pendingKeychainAuth = { cookie: auth.cookie, ae_s: auth.ae_s, ae_v: auth.ae_v };
+  clearTimeout(keychainTimer);
+  keychainTimer = setTimeout(flushToKeychain, KEYCHAIN_SETTLE_MS);
+}
+
+function flushToKeychain() {
+  const auth = pendingKeychainAuth;
+  const key = [auth.cookie, auth.ae_s, auth.ae_v].join('\u0000');
+  if (key === lastSentToKeychain) {
+    return;
+  }
+  lastSentToKeychain = key;
+  chrome.runtime.sendNativeMessage(KEYCHAIN_HOST, auth, (response) => {
+    if (chrome.runtime.lastError) {
+      lastSentToKeychain = null;
+      console.warn('Keychain host unavailable:', chrome.runtime.lastError.message);
+    } else if (!response || !response.ok) {
+      console.warn('Keychain host rejected session:', response && response.error);
     }
-  );
+  });
 }
 
 // Log API calls

@@ -12,18 +12,18 @@ def frame(obj):
 
 
 class FakeRunner:
-    def __init__(self, returncode=0):
+    def __init__(self, returncodes=(0,)):
         self.calls = []
-        self.returncode = returncode
+        self.returncodes = list(returncodes)
 
-    def __call__(self, cmd, input, capture_output, text):
-        self.calls.append((cmd, input))
+    def __call__(self, cmd, capture_output, text):
+        self.calls.append(cmd)
 
         class Result:
             pass
 
         r = Result()
-        r.returncode = self.returncode
+        r.returncode = self.returncodes.pop(0) if len(self.returncodes) > 1 else self.returncodes[0]
         r.stdout = ""
         r.stderr = ""
         return r
@@ -52,7 +52,10 @@ class MessageFramingTests(unittest.TestCase):
 
 class ValidationTests(unittest.TestCase):
     def test_accepts_cookie_and_ae_s(self):
-        self.assertEqual(host.validate({"cookie": "a=1; b=2", "ae_s": "xyz", "extra": 1}), ("a=1; b=2", "xyz"))
+        self.assertEqual(host.validate({"cookie": "a=1; b=2", "ae_s": "xyz", "extra": 1}), ("a=1; b=2", "xyz", None))
+
+    def test_accepts_optional_ae_v(self):
+        self.assertEqual(host.validate({"cookie": "a=1", "ae_s": "xyz", "ae_v": "090000"}), ("a=1", "xyz", "090000"))
 
     def test_rejects_missing_or_empty_fields(self):
         for msg in ({}, {"cookie": "a=1"}, {"cookie": "", "ae_s": "x"}, {"cookie": "a", "ae_s": 5}):
@@ -65,20 +68,31 @@ class ValidationTests(unittest.TestCase):
 
 
 class StoreTests(unittest.TestCase):
-    def test_writes_both_items_via_security_stdin_not_argv(self):
+    def test_writes_each_item_with_update_flag(self):
         runner = FakeRunner()
-        host.store('a=1; b="q"', "s\\t", runner=runner)
-        self.assertEqual(len(runner.calls), 1)
-        cmd, stdin = runner.calls[0]
-        self.assertEqual(cmd, ["/usr/bin/security", "-i"])
-        self.assertNotIn('a=1', " ".join(cmd))
-        self.assertIn('-s powertrack-cookie -w "a=1; b=\\"q\\""', stdin)
-        self.assertIn('-s powertrack-ae-s -w "s\\\\t"', stdin)
-        self.assertTrue(all(line.startswith("add-generic-password -U -a powertrack ") for line in stdin.splitlines()))
+        long_cookie = "a=" + "x" * 5000 + '; b="q"'
+        host.store(long_cookie, "s\\t", runner=runner)
+        self.assertEqual(
+            runner.calls,
+            [
+                ["/usr/bin/security", "add-generic-password", "-U", "-a", "powertrack", "-s", "powertrack-cookie", "-w", long_cookie],
+                ["/usr/bin/security", "add-generic-password", "-U", "-a", "powertrack", "-s", "powertrack-ae-s", "-w", "s\\t"],
+            ],
+        )
+
+    def test_stores_ae_v_when_given(self):
+        runner = FakeRunner()
+        host.store("a=1", "x", "090000", runner=runner)
+        self.assertEqual(runner.calls[-1][-3:], ["powertrack-ae-v", "-w", "090000"])
+
+    def test_retries_once_on_duplicate_item_race(self):
+        runner = FakeRunner(returncodes=(45, 0, 0))
+        host.store("a=1", "x", runner=runner)
+        self.assertEqual(len(runner.calls), 3)
 
     def test_raises_when_security_fails(self):
         with self.assertRaises(RuntimeError):
-            host.store("a=1", "x", runner=FakeRunner(returncode=1))
+            host.store("a=1", "x", runner=FakeRunner(returncodes=(1,)))
 
 
 class HandleTests(unittest.TestCase):

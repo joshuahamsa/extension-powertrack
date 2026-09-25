@@ -3,9 +3,11 @@
 Saves the PowerTrack session captured by the extension to the macOS Keychain, so
 scripts can use it without copying the cookie by hand.
 
-- Items: `powertrack-cookie` and `powertrack-ae-s` (account `powertrack`).
-- The extension sends only `cookie` and `ae_s`, and only when they change.
-- Values are passed to `security` over stdin, never as arguments, and never logged.
+- Items: `powertrack-cookie`, `powertrack-ae-s` and `powertrack-ae-v` (account `powertrack`).
+- The extension sends only those three values, once they stop changing for 2 seconds.
+- Values are never logged. They are passed to `security` as an argument, because
+  its stdin paths truncate the ~4 KB cookie (see the host's docstring).
+- Status lines (no values) go to `~/Library/Logs/powertrack_keychain_host.log`.
 
 ## Install
 
