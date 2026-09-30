@@ -184,9 +184,10 @@ async function saveAuthData(authData) {
   }
 }
 
-// Hand the session to the native host, which stores it in the macOS Keychain
-// (see native-host/). Only cookie and ae_s are sent; failures are non-fatal.
-const KEYCHAIN_HOST = 'com.dsd_hamsa.powertrack_keychain';
+// Hand the session to the shared native host, which stores it in the macOS Keychain
+// (see endpoint-extensions/native-host/). Only cookie, ae_s and ae_v are sent;
+// failures are non-fatal.
+const KEYCHAIN_HOST = 'com.dsd_hamsa.session_keychain';
 // In memory only, so the first capture after a reload or restart is always sent.
 let lastSentToKeychain = null;
 let pendingKeychainAuth = null;
@@ -206,7 +207,8 @@ function flushToKeychain() {
     return;
   }
   lastSentToKeychain = key;
-  chrome.runtime.sendNativeMessage(KEYCHAIN_HOST, auth, (response) => {
+  const message = { platform: 'powertrack', values: auth };
+  chrome.runtime.sendNativeMessage(KEYCHAIN_HOST, message, (response) => {
     if (chrome.runtime.lastError) {
       lastSentToKeychain = null;
       console.warn('Keychain host unavailable:', chrome.runtime.lastError.message);

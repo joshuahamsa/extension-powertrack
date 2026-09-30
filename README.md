@@ -23,3 +23,9 @@ Chrome extension for programmatic interaction with the AE PowerTrack web app. It
 - `PowerTrackExtension/scripts/` - background, content, and injected scripts.
 - `PowerTrackExtension/popup.html` + `PowerTrackExtension/styles.css` - popup UI.
 - `PowerTrackExtension/icons/` - extension icons.
+
+## Keychain session
+The extension saves the PowerTrack session (`cookie`, `ae_s`, `ae_v`) to the macOS
+Keychain through the shared native host in `endpoint-extensions/native-host/`
+(items `powertrack-cookie`, `powertrack-ae-s`, `powertrack-ae-v`). Install it from
+there with `install.py edge powertrack=<extension-id>`.
