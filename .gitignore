@@ -1,2 +1,43 @@
 *:Zone.Identifier
 __pycache__/
+# --- backup-2026-10-11 standard ignores ---
+# dependencies / build / caches
+.venv/
+venv/
+.pvenv/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.next/
+dist/
+build/
+.DS_Store
+# secrets (kept on lfg only)
+.env
+.env.*
+!.env.example
+*.kdbx
+.aws/
+*.Session
+auth.json
+.credentials.json
+*cookie*.txt
+*cookies*
+*cookie*.json
+api-token*
+*accessToken*
+*.pem
+# data (kept on lfg only)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.duckdb
+*.parquet
+*.pcapng
+*.etl
